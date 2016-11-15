@@ -8,6 +8,7 @@ var program = require('commander'),
 var configPath,
     config,
     configOptions = {},
+    allDetects = [],
     exitCode = 0;
 
 var tooManyWarnings = function (detects, userConfig) {
@@ -16,19 +17,34 @@ var tooManyWarnings = function (detects, userConfig) {
   return warningCount > 0 && warningCount > userConfig.options['max-warnings'];
 };
 
-var detectPattern = function (pattern, userConfig) {
+var detectPattern = function (pattern) {
   var detects = lint.lintFiles(pattern, configOptions, configPath);
 
-  if (program.verbose) {
-    lint.outputResults(detects, configOptions, configPath);
-  }
+  allDetects = allDetects.concat(detects);
 
-  if (lint.errorCount(detects).count || tooManyWarnings(detects, userConfig)) {
-    exitCode = 1;
-  }
-
+  // Note: does this even work? no-exit is an option, but not exit...
   if (program.exit) {
     lint.failOnError(detects, configOptions, configPath);
+  }
+};
+
+var run = function (userConfig) {
+  if (program.args.length === 0) {
+    detectPattern(null);
+  }
+  else {
+    program.args.forEach(function (path) {
+      detectPattern(path);
+    });
+  }
+
+  if (program.verbose) {
+    lint.outputResults(allDetects, configOptions, configPath);
+  }
+
+  if (lint.errorCount(allDetects).count ||
+      tooManyWarnings(allDetects, userConfig)) {
+    exitCode = 1;
   }
 };
 
@@ -75,14 +91,7 @@ if (program.maxWarnings && program.maxWarnings !== true) {
 // load our config here so we only load it once for each file
 config = lint.getConfig(configOptions, configPath);
 
-if (program.args.length === 0) {
-  detectPattern(null, config);
-}
-else {
-  program.args.forEach(function (path) {
-    detectPattern(path, config);
-  });
-}
+run(config);
 
 process.on('exit', function () {
   process.exit(exitCode); // eslint-disable-line no-process-exit
